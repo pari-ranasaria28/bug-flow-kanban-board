@@ -68,7 +68,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ projectId, refreshTrigger }) 
         .from('tickets')
         .select(`
           *,
-          assignee:profiles(full_name, username)
+          assignee:profiles!fk_tickets_assignee_id(full_name, username)
         `)
         .eq('project_id', projectId);
 

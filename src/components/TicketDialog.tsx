@@ -115,7 +115,7 @@ const TicketDialog: React.FC<TicketDialogProps> = ({
         .from('comments')
         .select(`
           *,
-          profiles(full_name, username)
+          profiles!fk_comments_author_id(full_name, username)
         `)
         .eq('ticket_id', ticket.id)
         .order('created_at', { ascending: true });
@@ -133,7 +133,7 @@ const TicketDialog: React.FC<TicketDialogProps> = ({
         .from('project_members')
         .select(`
           user_id,
-          profiles(full_name, username)
+          profiles!fk_project_members_user_id(full_name, username)
         `)
         .eq('project_id', projectId);
 

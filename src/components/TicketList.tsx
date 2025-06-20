@@ -80,8 +80,8 @@ const TicketList: React.FC<TicketListProps> = ({ projectId, refreshTrigger }) =>
         .from('tickets')
         .select(`
           *,
-          assignee:profiles!tickets_assignee_id_fkey(full_name, username),
-          reporter:profiles!tickets_reporter_id_fkey(full_name, username)
+          assignee:profiles!fk_tickets_assignee_id(full_name, username),
+          reporter:profiles!fk_tickets_reporter_id(full_name, username)
         `)
         .eq('project_id', projectId)
         .order('created_at', { ascending: false });

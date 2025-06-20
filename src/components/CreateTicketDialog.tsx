@@ -55,7 +55,7 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
         .from('project_members')
         .select(`
           user_id,
-          profiles(full_name, username)
+          profiles!fk_project_members_user_id(full_name, username)
         `)
         .eq('project_id', projectId);
 
@@ -74,14 +74,14 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
     try {
       const { error } = await supabase
         .from('tickets')
-        .insert([
-          {
-            ...ticketData,
-            project_id: projectId,
-            reporter_id: user.id,
-            assignee_id: ticketData.assignee_id || null
-          }
-        ]);
+        .insert({
+          ...ticketData,
+          project_id: projectId,
+          reporter_id: user.id,
+          assignee_id: ticketData.assignee_id || null,
+          type: ticketData.type as 'bug' | 'feature' | 'task',
+          priority: ticketData.priority as 'low' | 'medium' | 'high' | 'critical'
+        });
 
       if (error) throw error;
 

@@ -61,7 +61,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
         .from('project_members')
         .select(`
           *,
-          profiles(full_name, username)
+          profiles!fk_project_members_user_id(full_name, username)
         `)
         .eq('project_id', project.id);
 
@@ -149,14 +149,12 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
       // Add the member
       const { error } = await supabase
         .from('project_members')
-        .insert([
-          {
-            project_id: project.id,
-            user_id: userData.id,
-            role: inviteRole,
-            invited_by: user?.id
-          }
-        ]);
+        .insert({
+          project_id: project.id,
+          user_id: userData.id,
+          role: inviteRole as 'admin' | 'developer' | 'viewer',
+          invited_by: user?.id
+        });
 
       if (error) throw error;
 
