@@ -29,6 +29,7 @@ const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [newProject, setNewProject] = useState({
     name: '',
     description: ''
@@ -40,25 +41,71 @@ const Dashboard = () => {
       return;
     }
     fetchProjects();
-  }, [user]);
+  }, [user, navigate]);
 
   const fetchProjects = async () => {
+    if (!user) return;
+    
     try {
-      const { data, error } = await supabase
+      console.log('Fetching projects for user:', user.id);
+      
+      // First get projects where user is owner or member
+      const { data: memberProjects, error: memberError } = await supabase
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', user.id);
+
+      if (memberError) {
+        console.error('Error fetching member projects:', memberError);
+        throw memberError;
+      }
+
+      const projectIds = memberProjects?.map(pm => pm.project_id) || [];
+      
+      // Get projects where user is owner
+      const { data: ownedProjects, error: ownedError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('owner_id', user.id);
+
+      if (ownedError) {
+        console.error('Error fetching owned projects:', ownedError);
+        throw ownedError;
+      }
+
+      const ownedProjectIds = ownedProjects?.map(p => p.id) || [];
+      
+      // Combine all project IDs
+      const allProjectIds = [...new Set([...projectIds, ...ownedProjectIds])];
+      
+      if (allProjectIds.length === 0) {
+        setProjects([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch project details with counts
+      const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select(`
           *,
           tickets(count),
           project_members(count)
-        `);
+        `)
+        .in('id', allProjectIds);
 
-      if (error) throw error;
-      setProjects(data || []);
+      if (projectsError) {
+        console.error('Error fetching projects:', projectsError);
+        throw projectsError;
+      }
+
+      console.log('Fetched projects:', projectsData);
+      setProjects(projectsData || []);
     } catch (error) {
-      console.error('Error fetching projects:', error);
+      console.error('Error in fetchProjects:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch projects",
+        description: "Failed to fetch projects. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -68,35 +115,77 @@ const Dashboard = () => {
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create a project",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!newProject.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Project name is required",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsCreating(true);
+    console.log('Creating project for user:', user.id);
 
     try {
-      const { data, error } = await supabase
+      // Create the project
+      const { data: projectData, error: projectError } = await supabase
         .from('projects')
         .insert([
           {
-            name: newProject.name,
-            description: newProject.description,
+            name: newProject.name.trim(),
+            description: newProject.description.trim() || null,
             owner_id: user.id
           }
         ])
         .select()
         .single();
 
-      if (error) throw error;
+      if (projectError) {
+        console.error('Error creating project:', projectError);
+        throw projectError;
+      }
 
-      // Add the creator as a project member
-      await supabase
+      console.log('Project created:', projectData);
+
+      // Add the creator as a project member with admin role
+      const { error: memberError } = await supabase
         .from('project_members')
         .insert([
           {
-            project_id: data.id,
+            project_id: projectData.id,
             user_id: user.id,
             role: 'admin'
           }
         ]);
 
-      setProjects([data, ...projects]);
+      if (memberError) {
+        console.error('Error adding project member:', memberError);
+        // Don't throw here as the project was created successfully
+        toast({
+          title: "Warning",
+          description: "Project created but failed to add you as member. You can still access it as owner.",
+          variant: "destructive"
+        });
+      }
+
+      // Add to local state
+      const newProjectWithCounts = {
+        ...projectData,
+        ticket_count: 0,
+        member_count: 1
+      };
+      
+      setProjects(prev => [newProjectWithCounts, ...prev]);
       setNewProject({ name: '', description: '' });
       setIsCreateDialogOpen(false);
       
@@ -104,19 +193,30 @@ const Dashboard = () => {
         title: "Success",
         description: "Project created successfully!"
       });
-    } catch (error) {
-      console.error('Error creating project:', error);
+    } catch (error: any) {
+      console.error('Error in createProject:', error);
       toast({
         title: "Error",
-        description: "Failed to create project",
+        description: error.message || "Failed to create project. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate('/auth');
+    try {
+      await signOut();
+      navigate('/auth');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sign out",
+        variant: "destructive"
+      });
+    }
   };
 
   if (loading) {
@@ -137,7 +237,9 @@ const Dashboard = () => {
               <h1 className="text-xl font-semibold text-gray-900">Bug Tracker</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">Welcome, {user?.user_metadata?.full_name || user?.email}</span>
+              <span className="text-sm text-gray-700">
+                Welcome, {user?.user_metadata?.full_name || user?.user_metadata?.username || user?.email}
+              </span>
               <Button variant="outline" size="sm" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
@@ -176,6 +278,7 @@ const Dashboard = () => {
                     value={newProject.name}
                     onChange={(e) => setNewProject(prev => ({ ...prev, name: e.target.value }))}
                     required
+                    disabled={isCreating}
                   />
                 </div>
                 <div className="space-y-2">
@@ -185,9 +288,12 @@ const Dashboard = () => {
                     placeholder="Describe your project"
                     value={newProject.description}
                     onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
+                    disabled={isCreating}
                   />
                 </div>
-                <Button type="submit" className="w-full">Create Project</Button>
+                <Button type="submit" className="w-full" disabled={isCreating}>
+                  {isCreating ? 'Creating...' : 'Create Project'}
+                </Button>
               </form>
             </DialogContent>
           </Dialog>

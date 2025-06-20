@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import { Bug } from 'lucide-react';
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -28,54 +30,120 @@ const Auth = () => {
     fullName: ''
   });
 
+  const [resetEmail, setResetEmail] = useState('');
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const { error } = await signIn(signInData.email, signInData.password);
-    
-    if (error) {
+    try {
+      const { error } = await signIn(signInData.email, signInData.password);
+      
+      if (error) {
+        console.error('Sign in error:', error);
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Successfully signed in!"
+        });
+        navigate('/dashboard');
+      }
+    } catch (error: any) {
+      console.error('Unexpected sign in error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: "An unexpected error occurred",
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Success",
-        description: "Successfully signed in!"
-      });
-      navigate('/dashboard');
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const { error } = await signUp(
-      signUpData.email,
-      signUpData.password,
-      signUpData.username,
-      signUpData.fullName
-    );
-    
-    if (error) {
+    try {
+      const { error } = await signUp(
+        signUpData.email,
+        signUpData.password,
+        signUpData.username,
+        signUpData.fullName
+      );
+      
+      if (error) {
+        console.error('Sign up error:', error);
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Please check your email to verify your account."
+        });
+      }
+    } catch (error: any) {
+      console.error('Unexpected sign up error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: "An unexpected error occurred",
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Success",
-        description: "Please check your email to verify your account."
-      });
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      toast({
+        title: "Error",
+        description: "Please enter your email address",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsResettingPassword(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/auth`
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Password reset email sent! Check your inbox."
+        });
+        setResetEmail('');
+      }
+    } catch (error: any) {
+      console.error('Unexpected password reset error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive"
+      });
+    } finally {
+      setIsResettingPassword(false);
+    }
   };
 
   return (
@@ -90,9 +158,10 @@ const Auth = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsTrigger value="reset">Reset</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
@@ -106,6 +175,7 @@ const Auth = () => {
                     value={signInData.email}
                     onChange={(e) => setSignInData(prev => ({ ...prev, email: e.target.value }))}
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -117,6 +187,7 @@ const Auth = () => {
                     value={signInData.password}
                     onChange={(e) => setSignInData(prev => ({ ...prev, password: e.target.value }))}
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
@@ -136,6 +207,7 @@ const Auth = () => {
                     value={signUpData.fullName}
                     onChange={(e) => setSignUpData(prev => ({ ...prev, fullName: e.target.value }))}
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -147,6 +219,7 @@ const Auth = () => {
                     value={signUpData.username}
                     onChange={(e) => setSignUpData(prev => ({ ...prev, username: e.target.value }))}
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -158,6 +231,7 @@ const Auth = () => {
                     value={signUpData.email}
                     onChange={(e) => setSignUpData(prev => ({ ...prev, email: e.target.value }))}
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -169,11 +243,35 @@ const Auth = () => {
                     value={signUpData.password}
                     onChange={(e) => setSignUpData(prev => ({ ...prev, password: e.target.value }))}
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Creating account...' : 'Create Account'}
                 </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="reset">
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reset-email">Email</Label>
+                  <Input
+                    id="reset-email"
+                    type="email"
+                    placeholder="Enter your email address"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    required
+                    disabled={isResettingPassword}
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={isResettingPassword}>
+                  {isResettingPassword ? 'Sending...' : 'Send Reset Email'}
+                </Button>
+                <p className="text-sm text-gray-600 text-center">
+                  Enter your email address and we'll send you a link to reset your password.
+                </p>
               </form>
             </TabsContent>
           </Tabs>
