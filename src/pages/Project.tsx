@@ -26,51 +26,101 @@ const Project = () => {
   const { toast } = useToast();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isCreateTicketOpen, setIsCreateTicketOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     if (!user) {
+      console.log('No user found, redirecting to auth');
       navigate('/auth');
       return;
     }
     if (projectId) {
       fetchProject();
+    } else {
+      setError('No project ID provided');
+      setLoading(false);
     }
-  }, [user, projectId]);
+  }, [user, projectId, navigate]);
 
   const fetchProject = async () => {
+    console.log('Fetching project:', projectId);
+    setLoading(true);
+    setError(null);
+    
     try {
+      // First check if user has access to this project
+      const { data: projectIds, error: accessError } = await supabase
+        .rpc('get_user_project_ids');
+
+      if (accessError) {
+        console.error('Error checking project access:', accessError);
+        throw new Error('Failed to verify project access');
+      }
+
+      const hasAccess = projectIds?.some((p: any) => p.project_id === projectId);
+      if (!hasAccess) {
+        console.log('User does not have access to this project');
+        setError('You do not have access to this project');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch project details
       const { data, error } = await supabase
         .from('projects')
         .select('*')
         .eq('id', projectId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching project:', error);
+        throw error;
+      }
+
+      console.log('Project fetched successfully:', data);
       setProject(data);
     } catch (error) {
-      console.error('Error fetching project:', error);
+      console.error('Error in fetchProject:', error);
+      setError('Failed to load project');
       toast({
         title: "Error",
         description: "Failed to fetch project details",
         variant: "destructive"
       });
-      navigate('/dashboard');
     } finally {
       setLoading(false);
     }
   };
 
   const handleTicketCreated = () => {
+    console.log('Ticket created, refreshing data');
     setRefreshTrigger(prev => prev + 1);
     setIsCreateTicketOpen(false);
+  };
+
+  const handleCreateTicketClick = () => {
+    console.log('Create ticket button clicked');
+    setIsCreateTicketOpen(true);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Error</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
+        </div>
       </div>
     );
   }
@@ -100,7 +150,7 @@ const Project = () => {
                 <p className="text-sm text-gray-600">{project.description}</p>
               </div>
             </div>
-            <Button onClick={() => setIsCreateTicketOpen(true)}>
+            <Button onClick={handleCreateTicketClick}>
               <Plus className="h-4 w-4 mr-2" />
               New Ticket
             </Button>
@@ -130,12 +180,14 @@ const Project = () => {
         </Tabs>
       </main>
 
-      <CreateTicketDialog
-        projectId={projectId!}
-        isOpen={isCreateTicketOpen}
-        onClose={() => setIsCreateTicketOpen(false)}
-        onTicketCreated={handleTicketCreated}
-      />
+      {projectId && (
+        <CreateTicketDialog
+          projectId={projectId}
+          isOpen={isCreateTicketOpen}
+          onClose={() => setIsCreateTicketOpen(false)}
+          onTicketCreated={handleTicketCreated}
+        />
+      )}
     </div>
   );
 };
