@@ -46,6 +46,14 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchProjectMembers();
+      // Reset form when dialog opens
+      setTicketData({
+        title: '',
+        description: '',
+        type: 'task',
+        priority: 'medium',
+        assignee_id: ''
+      });
     }
   }, [isOpen, projectId]);
 
@@ -68,42 +76,63 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create a ticket",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!ticketData.title.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a ticket title",
+        variant: "destructive"
+      });
+      return;
+    }
 
     setLoading(true);
     try {
+      console.log('Creating ticket with data:', {
+        ...ticketData,
+        project_id: projectId,
+        reporter_id: user.id,
+        assignee_id: ticketData.assignee_id || null,
+      });
+
       const { error } = await supabase
         .from('tickets')
         .insert({
-          ...ticketData,
+          title: ticketData.title,
+          description: ticketData.description,
+          type: ticketData.type as 'bug' | 'feature' | 'task',
+          priority: ticketData.priority as 'low' | 'medium' | 'high' | 'critical',
+          status: 'todo',
           project_id: projectId,
           reporter_id: user.id,
           assignee_id: ticketData.assignee_id || null,
-          type: ticketData.type as 'bug' | 'feature' | 'task',
-          priority: ticketData.priority as 'low' | 'medium' | 'high' | 'critical'
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
       toast({
         title: "Success",
         description: "Ticket created successfully!"
       });
 
-      setTicketData({
-        title: '',
-        description: '',
-        type: 'task',
-        priority: 'medium',
-        assignee_id: ''
-      });
-      
       onTicketCreated();
+      onClose();
     } catch (error) {
       console.error('Error creating ticket:', error);
       toast({
         title: "Error",
-        description: "Failed to create ticket",
+        description: "Failed to create ticket. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -111,8 +140,19 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
     }
   };
 
+  const handleClose = () => {
+    setTicketData({
+      title: '',
+      description: '',
+      type: 'task',
+      priority: 'medium',
+      assignee_id: ''
+    });
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New Ticket</DialogTitle>
@@ -201,7 +241,7 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
           </div>
 
           <div className="flex justify-end space-x-3">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
