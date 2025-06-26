@@ -229,7 +229,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_project_ids: {
+        Args: { user_uuid?: string }
+        Returns: {
+          project_id: string
+        }[]
+      }
     }
     Enums: {
       ticket_priority: "low" | "medium" | "high" | "critical"

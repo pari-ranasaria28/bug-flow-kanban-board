@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,40 +48,24 @@ const Dashboard = () => {
     try {
       console.log('Fetching projects for user:', user.id);
       
-      // First get projects where user is owner or member
-      const { data: memberProjects, error: memberError } = await supabase
-        .from('project_members')
-        .select('project_id')
-        .eq('user_id', user.id);
+      // Use the new database function to get user's project IDs
+      const { data: userProjectIds, error: projectIdsError } = await supabase
+        .rpc('get_user_project_ids');
 
-      if (memberError) {
-        console.error('Error fetching member projects:', memberError);
-        throw memberError;
+      if (projectIdsError) {
+        console.error('Error fetching user project IDs:', projectIdsError);
+        throw projectIdsError;
       }
 
-      const projectIds = memberProjects?.map(pm => pm.project_id) || [];
-      
-      // Get projects where user is owner
-      const { data: ownedProjects, error: ownedError } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('owner_id', user.id);
+      console.log('User project IDs:', userProjectIds);
 
-      if (ownedError) {
-        console.error('Error fetching owned projects:', ownedError);
-        throw ownedError;
-      }
-
-      const ownedProjectIds = ownedProjects?.map(p => p.id) || [];
-      
-      // Combine all project IDs
-      const allProjectIds = [...new Set([...projectIds, ...ownedProjectIds])];
-      
-      if (allProjectIds.length === 0) {
+      if (!userProjectIds || userProjectIds.length === 0) {
         setProjects([]);
         setLoading(false);
         return;
       }
+
+      const projectIds = userProjectIds.map(item => item.project_id);
 
       // Fetch project details with counts
       const { data: projectsData, error: projectsError } = await supabase
@@ -92,7 +75,7 @@ const Dashboard = () => {
           tickets(count),
           project_members(count)
         `)
-        .in('id', allProjectIds);
+        .in('id', projectIds);
 
       if (projectsError) {
         console.error('Error fetching projects:', projectsError);
