@@ -413,10 +413,12 @@ const TicketDialog: React.FC<TicketDialogProps> = ({
                     <SelectValue placeholder="Select assignee" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+
                     {projectMembers.map((member) => (
                       <SelectItem key={member.user_id} value={member.user_id}>
-                        {member.profiles.full_name || member.profiles.username}
+                        {member.profiles?.full_name || member.profiles?.username || 'Unknown User'}
+
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -59,13 +59,21 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
 
   const fetchProjectMembers = async () => {
     try {
+      // const { data, error } = await supabase
+      //   .from('project_members')
+      //   .select(`
+      //     user_id,
+      //     profiles!fk_project_members_user_id(full_name, username)
+      //   `)
+      //   .eq('project_id', projectId);
       const { data, error } = await supabase
         .from('project_members')
         .select(`
           user_id,
-          profiles!fk_project_members_user_id(full_name, username)
+          profiles(full_name, username)
         `)
         .eq('project_id', projectId);
+
 
       if (error) throw error;
       setProjectMembers(data || []);
@@ -100,7 +108,7 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
         ...ticketData,
         project_id: projectId,
         reporter_id: user.id,
-        assignee_id: ticketData.assignee_id || null,
+        assignee_id: ticketData.assignee_id === 'unassigned' ? null : ticketData.assignee_id,
       });
 
       const { error } = await supabase
@@ -113,7 +121,8 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
           status: 'todo',
           project_id: projectId,
           reporter_id: user.id,
-          assignee_id: ticketData.assignee_id || null,
+          assignee_id: ticketData.assignee_id === 'unassigned' ? null : ticketData.assignee_id,
+
         });
 
       if (error) {
@@ -152,7 +161,9 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) handleClose();
+      }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New Ticket</DialogTitle>
@@ -229,10 +240,11 @@ const CreateTicketDialog: React.FC<CreateTicketDialogProps> = ({
                   <SelectValue placeholder="Select assignee" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
                   {projectMembers.map((member) => (
                     <SelectItem key={member.user_id} value={member.user_id}>
-                      {member.profiles.full_name || member.profiles.username}
+                      {member.profiles?.full_name || member.profiles?.username || 'Unknown User'}
+
                     </SelectItem>
                   ))}
                 </SelectContent>

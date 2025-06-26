@@ -317,7 +317,8 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
                   </Avatar>
                   <div>
                     <p className="font-medium text-sm">
-                      {member.profiles.full_name || member.profiles.username}
+                      {member.profiles?.full_name || member.profiles?.username || 'Unknown User'}
+
                       {member.user_id === project.owner_id && (
                         <Crown className="h-4 w-4 inline-block ml-2 text-yellow-500" />
                       )}
